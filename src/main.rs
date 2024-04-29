@@ -27,6 +27,9 @@ struct Args {
 
     #[arg(short, long)]
     bucket: String,
+
+    #[arg(short, long)]
+    path: Option<String>,
 }
 
 #[tokio::main]
@@ -44,7 +47,8 @@ async fn main() {
     }
     let store = Arc::new(store.build().unwrap());
 
-    let path = Path::from("some_file.data");
+    let path = args.path.unwrap_or("some_file.data".to_string());
+    let path = Path::from(path.as_str());
 
     let total_size = args.total_size.unwrap_or(1024 * 1024 * 1024);
     let upload_size = args.upload_size.unwrap_or(8 * 1024 * 1024);
