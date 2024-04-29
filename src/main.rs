@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use clap::Parser;
+use futures::StreamExt;
 use object_store::{aws::AmazonS3Builder, path::Path, ObjectStore, PutPayload};
 
 #[derive(Parser)]
@@ -39,7 +42,7 @@ async fn main() {
     if let Some(secret_key) = args.secret_key {
         store = store.with_secret_access_key(secret_key);
     }
-    let store = store.build().unwrap();
+    let store = Arc::new(store.build().unwrap());
 
     let path = Path::from("some_file.data");
 
@@ -77,17 +80,27 @@ async fn main() {
     let total_size = bytes_written;
 
     let mut bytes_read = 0;
-    let total_start = std::time::Instant::now();
+    let mut read_tasks = Vec::new();
     while bytes_read < total_size as usize {
-        let start = std::time::Instant::now();
-        store
-            .get_range(&path, bytes_read..bytes_read + download_size as usize)
-            .await
-            .unwrap();
-        let elapsed = start.elapsed();
-        println!("Download took {:?} seconds", elapsed.as_secs_f64());
+        let store = store.clone();
+        let path = path.clone();
+        read_tasks.push(async move {
+            let start = std::time::Instant::now();
+            store
+                .get_range(&path, bytes_read..bytes_read + download_size as usize)
+                .await
+                .unwrap();
+            println!("Download took {:?} seconds", start.elapsed().as_secs_f64());
+        });
         bytes_read += download_size as usize;
     }
+
+    let io_parallelism = read_tasks.len();
+    let total_start = std::time::Instant::now();
+    futures::stream::iter(read_tasks)
+        .buffered(io_parallelism)
+        .collect::<Vec<_>>()
+        .await;
     let total_elapsed = total_start.elapsed();
     println!(
         "Total download took {:?} seconds",
