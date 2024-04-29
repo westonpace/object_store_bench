@@ -1,0 +1,10 @@
+[package]
+name = "object_store_bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bytes = "1.6.0"
+clap = { version = "4.5.4", features = ["derive"] }
+object_store = { version = "0.10.0", features = ["aws"] }
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
