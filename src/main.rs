@@ -49,35 +49,40 @@ async fn main() {
     let total_size = args.total_size.unwrap_or(1024 * 1024 * 1024);
     let upload_size = args.upload_size.unwrap_or(8 * 1024 * 1024);
     let download_size = args.download_size.unwrap_or(32 * 1024 * 1024);
-    // Upload file
-    let mut bytes_written = 0;
-    println!(
-        "Uploading {} bytes of data in chunks of {}",
-        total_size, upload_size
-    );
-    // Just initialize whatever garbage
-    let mut data = bytes::BytesMut::with_capacity(upload_size as usize);
-    unsafe { data.set_len(upload_size as usize) };
-    let data = data.freeze();
-    let mut multipart = store.put_multipart(&path).await.unwrap();
-    let total_start = std::time::Instant::now();
-    while bytes_written < total_size {
-        let start = std::time::Instant::now();
-        println!("About to upload {} bytes of data", data.len());
-        multipart
-            .put_part(PutPayload::from_bytes(data.clone()))
-            .await
-            .unwrap();
-        println!("Upload took {:?} seconds", start.elapsed().as_secs_f64());
-        bytes_written += upload_size;
-    }
-    multipart.complete().await.unwrap();
-    println!(
-        "Total upload took {:?} seconds",
-        total_start.elapsed().as_secs_f64()
-    );
+    let total_size = if !args.skip_upload {
+        // Upload file
+        let mut bytes_written = 0;
+        println!(
+            "Uploading {} bytes of data in chunks of {}",
+            total_size, upload_size
+        );
+        // Just initialize whatever garbage
+        let mut data = bytes::BytesMut::with_capacity(upload_size as usize);
+        unsafe { data.set_len(upload_size as usize) };
+        let data = data.freeze();
+        let mut multipart = store.put_multipart(&path).await.unwrap();
+        let total_start = std::time::Instant::now();
+        while bytes_written < total_size {
+            let start = std::time::Instant::now();
+            println!("About to upload {} bytes of data", data.len());
+            multipart
+                .put_part(PutPayload::from_bytes(data.clone()))
+                .await
+                .unwrap();
+            println!("Upload took {:?} seconds", start.elapsed().as_secs_f64());
+            bytes_written += upload_size;
+        }
+        multipart.complete().await.unwrap();
+        println!(
+            "Total upload took {:?} seconds",
+            total_start.elapsed().as_secs_f64()
+        );
 
-    let total_size = bytes_written;
+        bytes_written
+    } else {
+        let meta = store.head(&path).await.unwrap();
+        meta.size as u64
+    };
 
     let mut bytes_read = 0;
     let mut read_tasks = Vec::new();
