@@ -30,29 +30,43 @@ struct Args {
 
     #[arg(short, long)]
     path: Option<String>,
+
+    #[arg(short, long)]
+    num_clients: Option<u32>,
+
+    #[arg(short, long)]
+    max_threads_per_client: Option<u32>,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
-    let mut store = AmazonS3Builder::new()
-        .with_bucket_name(args.bucket)
-        .with_region("us-east-1");
-    if let Some(access_key) = args.access_key {
-        store = store.with_access_key_id(access_key);
-    }
-    if let Some(secret_key) = args.secret_key {
-        store = store.with_secret_access_key(secret_key);
-    }
-    let store = Arc::new(store.build().unwrap());
-
     let path = args.path.unwrap_or("some_file.data".to_string());
     let path = Path::from(path.as_str());
+
+    let num_clients = args.num_clients.unwrap_or(8);
+    let threads_per_client = args.max_threads_per_client.unwrap_or(8);
 
     let total_size = args.total_size.unwrap_or(1024 * 1024 * 1024);
     let upload_size = args.upload_size.unwrap_or(8 * 1024 * 1024);
     let download_size = args.download_size.unwrap_or(32 * 1024 * 1024);
+
+    let make_store = move || {
+        let mut store = AmazonS3Builder::new()
+            .with_bucket_name(args.bucket.clone())
+            .with_region("us-east-1");
+        if let Some(access_key) = args.access_key.clone() {
+            store = store.with_access_key_id(access_key);
+        }
+        if let Some(secret_key) = args.secret_key.clone() {
+            store = store.with_secret_access_key(secret_key);
+        }
+        Arc::new(store.build().unwrap())
+    };
+
+    let store = make_store();
+
     let total_size = if !args.skip_upload {
         // Upload file
         let mut bytes_written = 0;
@@ -88,28 +102,42 @@ async fn main() {
         meta.size as u64
     };
 
-    let mut bytes_read = 0;
-    let mut read_tasks = Vec::new();
-    while bytes_read < total_size as usize {
-        let store = store.clone();
+    let mut task_idx = 0;
+    let mut read_tasks = Vec::with_capacity(num_clients as usize);
+    for _ in 0..num_clients {
+        let store = make_store();
+        read_tasks.push((store, Vec::new()));
+    }
+    while (task_idx * download_size) < total_size {
         let path = path.clone();
-        read_tasks.push(async move {
+        let read_start = task_idx * download_size;
+        let read_end = read_start + download_size;
+        let store = read_tasks[task_idx as usize].0.clone();
+        read_tasks[task_idx as usize].1.push(async move {
             let start = std::time::Instant::now();
             store
-                .get_range(&path, bytes_read..bytes_read + download_size as usize)
+                .get_range(&path, read_start as usize..read_end as usize)
                 .await
                 .unwrap();
             println!("Download took {:?} seconds", start.elapsed().as_secs_f64());
         });
-        bytes_read += download_size as usize;
+        task_idx += 1;
     }
 
-    let io_parallelism = read_tasks.len();
     let total_start = std::time::Instant::now();
+    let read_tasks = read_tasks
+        .into_iter()
+        .map(|tasks| {
+            futures::stream::iter(tasks.1)
+                .buffered(threads_per_client as usize)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
     futures::stream::iter(read_tasks)
-        .buffered(io_parallelism)
+        .buffer_unordered(num_clients as usize)
         .collect::<Vec<_>>()
         .await;
+
     let total_elapsed = total_start.elapsed();
     println!(
         "Total download took {:?} seconds",
