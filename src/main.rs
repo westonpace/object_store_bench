@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use clap::Parser;
 use futures::StreamExt;
-use object_store::{aws::AmazonS3Builder, path::Path, ClientOptions, ObjectStore, PutPayload};
+use object_store::{aws::AmazonS3Builder, path::Path, ObjectStore, PutPayload};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -36,6 +36,9 @@ struct Args {
 
     #[arg(short, long)]
     max_threads_per_client: Option<u32>,
+
+    #[arg(short, long)]
+    num_iterations: Option<u32>,
 }
 
 #[tokio::main]
@@ -47,6 +50,8 @@ async fn main() {
 
     let num_clients = args.num_clients.unwrap_or(8);
     let threads_per_client = args.max_threads_per_client.unwrap_or(8);
+
+    let num_iterations = args.num_iterations.unwrap_or(5);
 
     let total_size = args.total_size.unwrap_or(1024 * 1024 * 1024);
     let upload_size = args.upload_size.unwrap_or(8 * 1024 * 1024);
@@ -102,50 +107,52 @@ async fn main() {
         meta.size as u64
     };
 
-    let mut task_idx = 0;
-    let mut read_tasks = Vec::with_capacity(num_clients as usize);
-    for _ in 0..num_clients {
-        let store = make_store();
-        read_tasks.push((store, Vec::new()));
-    }
-    while (task_idx * download_size) < total_size {
-        let client_idx = (task_idx % num_clients as u64) as usize;
-        let path = path.clone();
-        let read_start = task_idx * download_size;
-        let read_end = read_start + download_size;
-        let store = read_tasks[client_idx].0.clone();
-        read_tasks[client_idx].1.push(async move {
-            let start = std::time::Instant::now();
-            store
-                .get_range(&path, read_start as usize..read_end as usize)
-                .await
-                .unwrap();
-            println!(
-                "Download on client {} took {:?} seconds",
-                client_idx,
-                start.elapsed().as_secs_f64()
-            );
-        });
-        task_idx += 1;
-    }
+    for _ in 0..num_iterations {
+        let mut task_idx = 0;
+        let mut read_tasks = Vec::with_capacity(num_clients as usize);
+        for _ in 0..num_clients {
+            let store = make_store();
+            read_tasks.push((store, Vec::new()));
+        }
+        while (task_idx * download_size) < total_size {
+            let client_idx = (task_idx % num_clients as u64) as usize;
+            let path = path.clone();
+            let read_start = task_idx * download_size;
+            let read_end = read_start + download_size;
+            let store = read_tasks[client_idx].0.clone();
+            read_tasks[client_idx].1.push(async move {
+                let start = std::time::Instant::now();
+                store
+                    .get_range(&path, read_start as usize..read_end as usize)
+                    .await
+                    .unwrap();
+                println!(
+                    "Download on client {} took {:?} seconds",
+                    client_idx,
+                    start.elapsed().as_secs_f64()
+                );
+            });
+            task_idx += 1;
+        }
 
-    let total_start = std::time::Instant::now();
-    let read_tasks = read_tasks
-        .into_iter()
-        .map(|tasks| {
-            futures::stream::iter(tasks.1)
-                .buffer_unordered(threads_per_client as usize)
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    futures::stream::iter(read_tasks)
-        .buffer_unordered(num_clients as usize)
-        .collect::<Vec<_>>()
-        .await;
+        let total_start = std::time::Instant::now();
+        let read_tasks = read_tasks
+            .into_iter()
+            .map(|tasks| {
+                futures::stream::iter(tasks.1)
+                    .buffer_unordered(threads_per_client as usize)
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>();
+        futures::stream::iter(read_tasks)
+            .buffer_unordered(num_clients as usize)
+            .collect::<Vec<_>>()
+            .await;
 
-    let total_elapsed = total_start.elapsed();
-    println!(
-        "Total download took {:?} seconds",
-        total_elapsed.as_secs_f64()
-    );
+        let total_elapsed = total_start.elapsed();
+        println!(
+            "Total download took {:?} seconds",
+            total_elapsed.as_secs_f64()
+        );
+    }
 }
