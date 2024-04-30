@@ -109,11 +109,12 @@ async fn main() {
         read_tasks.push((store, Vec::new()));
     }
     while (task_idx * download_size) < total_size {
+        let client_idx = (task_idx % num_clients as u64) as usize;
         let path = path.clone();
         let read_start = task_idx * download_size;
         let read_end = read_start + download_size;
-        let store = read_tasks[task_idx as usize].0.clone();
-        read_tasks[task_idx as usize].1.push(async move {
+        let store = read_tasks[client_idx].0.clone();
+        read_tasks[client_idx].1.push(async move {
             let start = std::time::Instant::now();
             store
                 .get_range(&path, read_start as usize..read_end as usize)
