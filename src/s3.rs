@@ -1,5 +1,6 @@
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::Client;
+use bytes::Buf;
 use clap::Parser;
 use futures::StreamExt;
 
@@ -84,18 +85,32 @@ async fn main() {
             read_tasks[client_idx].1.push(async move {
                 let start = std::time::Instant::now();
                 let range = format!("bytes={}-{}", read_start, read_end);
-                store
+                let mut data = store
                     .get_object()
                     .bucket(bucket)
                     .range(range)
                     .key(path)
                     .send()
                     .await
+                    .unwrap()
+                    .body
+                    .collect()
+                    .await
                     .unwrap();
+                let mut num_bytes = 0;
+                let mut num_chunks = 0;
+                while data.remaining() > 0 {
+                    let bytes_in_chunk = data.chunk().len();
+                    num_bytes += bytes_in_chunk;
+                    num_chunks += 1;
+                    data.advance(bytes_in_chunk);
+                }
                 println!(
-                    "Download on client {} took {:?} seconds",
+                    "Download on client {} took {:?} seconds to get {} bytes across {} chunks",
                     client_idx,
-                    start.elapsed().as_secs_f64()
+                    start.elapsed().as_secs_f64(),
+                    num_bytes,
+                    num_chunks,
                 );
             });
             task_idx += 1;
