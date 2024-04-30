@@ -130,7 +130,7 @@ async fn main() {
         .into_iter()
         .map(|tasks| {
             futures::stream::iter(tasks.1)
-                .buffered(threads_per_client as usize)
+                .buffer_unordered(threads_per_client as usize)
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
