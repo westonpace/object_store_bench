@@ -115,6 +115,7 @@ async fn main() {
         let read_end = read_start + download_size;
         let store = read_tasks[client_idx].0.clone();
         read_tasks[client_idx].1.push(async move {
+            println!("START TASK");
             let start = std::time::Instant::now();
             store
                 .get_range(&path, read_start as usize..read_end as usize)
