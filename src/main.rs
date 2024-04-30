@@ -55,7 +55,6 @@ async fn main() {
     let make_store = move || {
         let mut store = AmazonS3Builder::new()
             .with_bucket_name(args.bucket.clone())
-            .with_client_options(ClientOptions::new().with_http2_only())
             .with_region("us-east-1");
         if let Some(access_key) = args.access_key.clone() {
             store = store.with_access_key_id(access_key);
