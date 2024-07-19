@@ -50,7 +50,7 @@ async fn main() {
     let args = Args::parse();
 
     let path = args.path.unwrap_or("rab_files".to_string());
-    let path = Path::from(path.as_str());
+    let mut path = Path::from(path.as_str());
 
     let num_iterations = args.num_iterations.unwrap_or(5);
 
@@ -60,11 +60,14 @@ async fn main() {
     let max_concurrent_reads = args.max_concurrent_reads.unwrap_or(10000);
     let takes_per_iter = args.takes_per_iter.unwrap_or(10000);
 
+    let mut base_path = "".to_string();
+    let base_path_ref = &mut base_path;
     let make_store = move || {
         if args.base_uri.starts_with("s3://") {
             let mut store = AmazonS3Builder::new()
                 .with_bucket_name(args.base_uri[5..].to_string())
                 .with_region("us-east-1");
+            std::mem::swap(base_path_ref, &mut args.base_uri[5..].to_string());
             if let Some(access_key) = args.access_key.clone() {
                 store = store.with_access_key_id(access_key);
             }
@@ -77,6 +80,7 @@ async fn main() {
                 .with_bucket_name(args.base_uri[4..].to_string())
                 .build()
                 .unwrap();
+            std::mem::swap(base_path_ref, &mut args.base_uri[4..].to_string());
             Arc::new(store) as Arc<dyn ObjectStore>
         } else if args.base_uri == "memory" {
             Arc::new(InMemory::new()) as Arc<dyn ObjectStore>
@@ -90,6 +94,9 @@ async fn main() {
     println!("Num rows: {}", num_rows);
     println!("Num files: {}", num_files);
     println!("Rows per file: {}", rows_per_file);
+    if !base_path.is_empty() {
+        path = path.child(base_path);
+    }
 
     if !args.skip_upload {
         for file_idx in 0..num_files {
