@@ -49,9 +49,6 @@ struct Args {
 async fn main() {
     let args = Args::parse();
 
-    let path = args.path.unwrap_or("rab_files".to_string());
-    let mut path = Path::from(path.as_str());
-
     let num_iterations = args.num_iterations.unwrap_or(5);
 
     let num_files = args.num_files.unwrap_or(10);
@@ -94,9 +91,9 @@ async fn main() {
     println!("Num rows: {}", num_rows);
     println!("Num files: {}", num_files);
     println!("Rows per file: {}", rows_per_file);
-    if !base_path.is_empty() {
-        path = path.child(base_path);
-    }
+
+    let path = Path::from(format!("{}/{}", base_path, "rab_files"));
+
     println!("Path: {}", path);
 
     if !args.skip_upload {
