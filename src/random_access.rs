@@ -97,6 +97,7 @@ async fn main() {
     if !base_path.is_empty() {
         path = path.child(base_path);
     }
+    println!("Path: {}", path);
 
     if !args.skip_upload {
         for file_idx in 0..num_files {
