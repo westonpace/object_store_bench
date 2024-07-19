@@ -3,7 +3,8 @@ use std::sync::Arc;
 use clap::Parser;
 use futures::StreamExt;
 use object_store::{
-    aws::AmazonS3Builder, local::LocalFileSystem, path::Path, ObjectStore, PutPayload,
+    aws::AmazonS3Builder, gcp::GoogleCloudStorageBuilder, local::LocalFileSystem, memory::InMemory,
+    path::Path, ObjectStore, PutPayload,
 };
 use rand::prelude::SliceRandom;
 
@@ -71,6 +72,14 @@ async fn main() {
                 store = store.with_secret_access_key(secret_key);
             }
             Arc::new(store.build().unwrap()) as Arc<dyn ObjectStore>
+        } else if args.base_uri.starts_with("gs://") {
+            let store = GoogleCloudStorageBuilder::new()
+                .with_bucket_name(args.base_uri[4..].to_string())
+                .build()
+                .unwrap();
+            Arc::new(store) as Arc<dyn ObjectStore>
+        } else if args.base_uri == "memory" {
+            Arc::new(InMemory::new()) as Arc<dyn ObjectStore>
         } else {
             Arc::new(LocalFileSystem::new_with_prefix(args.base_uri).unwrap())
         }
