@@ -74,10 +74,9 @@ async fn main() {
             Arc::new(store.build().unwrap()) as Arc<dyn ObjectStore>
         } else if args.base_uri.starts_with("gs://") {
             let store = GoogleCloudStorageBuilder::new()
-                .with_bucket_name(args.base_uri[4..].to_string())
+                .with_url(args.base_uri)
                 .build()
                 .unwrap();
-            std::mem::swap(base_path_ref, &mut args.base_uri[4..].to_string());
             Arc::new(store) as Arc<dyn ObjectStore>
         } else if args.base_uri == "memory" {
             Arc::new(InMemory::new()) as Arc<dyn ObjectStore>
