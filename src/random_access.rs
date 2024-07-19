@@ -86,7 +86,10 @@ async fn main() {
     };
 
     let store = make_store();
-    let rows_per_file = num_rows / num_files;
+    let mut rows_per_file = num_rows / num_files;
+    if num_rows % num_files != 0 {
+        rows_per_file += 1;
+    }
     println!("Num rows: {}", num_rows);
     println!("Num files: {}", num_files);
     println!("Rows per file: {}", rows_per_file);
