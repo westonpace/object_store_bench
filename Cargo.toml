@@ -11,7 +11,17 @@ clap = { version = "4.5.4", features = ["derive"] }
 futures = "0.3.30"
 object_store = { version = "0.10.0", features = ["aws"] }
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
+parquet = { version = "51", features = ["arrow", "async"] }
+rand = "0.8.5"
 
 [[bin]]
 name = "s3_style_bench"
 path = "src/s3.rs"
+
+[[bin]]
+name = "parquet_bench"
+path = "src/parquet.rs"
+
+[[bin]]
+name = "random_access"
+path = "src/random_access.rs"
