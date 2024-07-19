@@ -125,10 +125,6 @@ async fn main() {
             let path = path.clone();
             let addr = row_ids[task_id as usize];
             let file_id = addr / rows_per_file;
-            if file_id > 10 {
-                println!("{} {} {}", addr, file_id, rows_per_file);
-                panic!();
-            }
             let file_offset = (addr % rows_per_file) * bytes_per_row;
             let read_end = file_offset + bytes_per_row;
             let store = store.clone();
