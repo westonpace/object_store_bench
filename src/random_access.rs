@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use clap::Parser;
 use futures::StreamExt;
@@ -122,6 +122,7 @@ async fn main() {
 
     for _ in 0..num_iterations {
         let mut row_ids = (0..num_rows).collect::<Vec<_>>();
+        let latencies = Arc::new(Mutex::new(Vec::new()));
         row_ids.shuffle(&mut rand::thread_rng());
         let mut read_tasks = Vec::with_capacity(num_rows as usize);
         for task_id in 0..takes_per_iter {
@@ -132,17 +133,26 @@ async fn main() {
             let read_end = file_offset + bytes_per_row;
             let store = store.clone();
             let path = path.child(file_id.to_string());
+            let latencies = latencies.clone();
 
             read_tasks.push(async move {
-                // let start = std::time::Instant::now();
+                let start = std::time::Instant::now();
                 let store = store.clone();
                 store
                     .get_range(&path, file_offset as usize..read_end as usize)
                     .await
                     .unwrap();
+                latencies
+                    .lock()
+                    .unwrap()
+                    .push(start.elapsed().as_secs_f64());
                 // println!("Download took {:?} seconds", start.elapsed().as_secs_f64());
             });
         }
+
+        let mut latencies = latencies.lock().unwrap();
+        latencies.sort_by(|a, b| a.total_cmp(b));
+        let p50 = latencies[latencies.len() / 2];
 
         let total_start = std::time::Instant::now();
         futures::stream::iter(read_tasks)
@@ -157,11 +167,12 @@ async fn main() {
             / total_elapsed.as_secs_f64()
             / (1024.0 * 1024.0 * 1024.0);
         println!(
-            "Total download took {:?} seconds ({} iops/s {} GiB/s {}s avg latency)",
+            "Total download took {:?} seconds ({} iops/s {} GiB/s {}s avg latency {} p50 latency)",
             total_elapsed.as_secs_f64(),
             iops_per_second,
             gibps,
             avg_latency,
+            p50,
         );
     }
 }
