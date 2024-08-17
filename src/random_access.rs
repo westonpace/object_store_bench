@@ -150,17 +150,17 @@ async fn main() {
             });
         }
 
-        let mut latencies = latencies.lock().unwrap();
-        latencies.sort_by(|a, b| a.total_cmp(b));
-        let p50 = latencies[latencies.len() / 2];
-
         let total_start = std::time::Instant::now();
         futures::stream::iter(read_tasks)
             .buffer_unordered(max_concurrent_reads as usize)
             .collect::<Vec<_>>()
             .await;
-
         let total_elapsed = total_start.elapsed();
+
+        let mut latencies = latencies.lock().unwrap();
+        latencies.sort_by(|a, b| a.total_cmp(b));
+        let p50 = latencies[latencies.len() / 2];
+
         let iops_per_second = (takes_per_iter as f64) / total_elapsed.as_secs_f64();
         let avg_latency = 1.0 / iops_per_second;
         let gibps = (takes_per_iter as f64 * bytes_per_row as f64)
