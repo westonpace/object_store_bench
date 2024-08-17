@@ -162,16 +162,14 @@ async fn main() {
         let p50 = latencies[latencies.len() / 2];
 
         let iops_per_second = (takes_per_iter as f64) / total_elapsed.as_secs_f64();
-        let avg_latency = 1.0 / iops_per_second;
         let gibps = (takes_per_iter as f64 * bytes_per_row as f64)
             / total_elapsed.as_secs_f64()
             / (1024.0 * 1024.0 * 1024.0);
         println!(
-            "Total download took {:?} seconds ({} iops/s {} GiB/s {}s avg latency {} p50 latency)",
+            "Total download took {:?} seconds ({} iops/s {} GiB/s {} p50 latency)",
             total_elapsed.as_secs_f64(),
             iops_per_second,
             gibps,
-            avg_latency,
             p50,
         );
     }
