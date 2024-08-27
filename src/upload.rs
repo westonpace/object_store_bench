@@ -65,11 +65,12 @@ async fn main() {
         tasks.push(async move {
             let start = std::time::Instant::now();
             log::info!("About to upload {} bytes of data", data.len());
-            let mut multipart = multipart.lock().unwrap();
-            multipart
-                .put_part(PutPayload::from_bytes(data.clone()))
-                .await
-                .unwrap();
+            {
+                let mut multipart = multipart.lock().unwrap();
+                multipart.put_part(PutPayload::from_bytes(data.clone()))
+            }
+            .await
+            .unwrap();
             log::info!(
                 "Upload took {:?} seconds progress={}",
                 start.elapsed().as_secs_f64(),
