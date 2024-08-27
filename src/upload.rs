@@ -21,6 +21,8 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     let args = Args::parse();
 
     let path = args.path.unwrap_or("big_upload.data".to_string());
@@ -37,9 +39,10 @@ async fn main() {
     let store = make_store();
 
     let mut bytes_written = 0;
-    println!(
+    log::info!(
         "Uploading {} bytes of data in chunks of {}",
-        total_size, part_size
+        total_size,
+        part_size
     );
 
     // Just initialize whatever garbage
@@ -50,16 +53,20 @@ async fn main() {
     let total_start = std::time::Instant::now();
     while bytes_written < total_size {
         let start = std::time::Instant::now();
-        println!("About to upload {} bytes of data", data.len());
+        log::info!("About to upload {} bytes of data", data.len());
         multipart
             .put_part(PutPayload::from_bytes(data.clone()))
             .await
             .unwrap();
-        println!("Upload took {:?} seconds", start.elapsed().as_secs_f64());
+        log::info!(
+            "Upload took {:?} seconds progress={}",
+            start.elapsed().as_secs_f64(),
+            bytes_written as f64 / total_size as f64
+        );
         bytes_written += part_size;
     }
     multipart.complete().await.unwrap();
-    println!(
+    log::info!(
         "Total upload took {:?} seconds",
         total_start.elapsed().as_secs_f64()
     );
