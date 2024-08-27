@@ -25,3 +25,7 @@ path = "src/parquet.rs"
 [[bin]]
 name = "random_access"
 path = "src/random_access.rs"
+
+[[bin]]
+name = "upload"
+path = "src/upload.rs"
