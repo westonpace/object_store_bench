@@ -8,7 +8,7 @@ use object_store::{gcp::GoogleCloudStorageBuilder, path::Path, ObjectStore, PutP
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long)]
-    part_size: Option<u64>,
+    initial_part_size: Option<u64>,
 
     #[arg(short, long)]
     total_size: Option<u64>,
@@ -23,6 +23,8 @@ struct Args {
     path: Option<String>,
 }
 
+const PART_SIZE_INCREMENT: u64 = 5 * 1024 * 1024;
+
 #[tokio::main]
 async fn main() {
     env_logger::init();
@@ -33,7 +35,7 @@ async fn main() {
     let path = Path::from(path.as_str());
 
     let total_size = args.total_size.unwrap_or(2 * 1024 * 1024 * 1024 * 1024);
-    let part_size = args.part_size.unwrap_or(10 * 1024 * 1024);
+    let initial_part_size = args.initial_part_size.unwrap_or(5 * 1024 * 1024);
     let max_parallelism = args.max_parallelism.unwrap_or(32);
 
     let make_store = move || {
@@ -45,23 +47,26 @@ async fn main() {
 
     let mut bytes_written = 0;
     log::info!(
-        "Uploading {} bytes of data in chunks of {}",
+        "Uploading {} bytes of data starting with chunks of size {}",
         total_size,
-        part_size
+        initial_part_size
     );
 
-    // Just initialize whatever garbage
-    let mut data = bytes::BytesMut::with_capacity(part_size as usize);
-    unsafe { data.set_len(part_size as usize) };
+    // Just initialize whatever garbage.  Max that `part_size` can reach is 99 * initial_part_size
+    let max_part_size = 99 * initial_part_size as usize;
+    let mut data = bytes::BytesMut::with_capacity(max_part_size);
+    unsafe { data.set_len(max_part_size) };
     let data = data.freeze();
 
     let multipart = Arc::new(Mutex::new(store.put_multipart(&path).await.unwrap()));
     let total_start = std::time::Instant::now();
 
-    let mut tasks = Vec::with_capacity(total_size as usize / part_size as usize + 1);
+    let mut tasks = Vec::with_capacity(10000);
     while bytes_written < total_size {
         let data = data.clone();
         let multipart = multipart.clone();
+        let part_size =
+            initial_part_size.max(((tasks.len() as u64 / 100) + 1) * PART_SIZE_INCREMENT);
         tasks.push(async move {
             let start = std::time::Instant::now();
             log::info!("About to upload {} bytes of data", data.len());
@@ -79,6 +84,7 @@ async fn main() {
         });
         bytes_written += part_size;
     }
+    log::info!("Generated {} tasks to upload", tasks.len());
     futures::stream::iter(tasks)
         .buffered(max_parallelism as usize)
         .collect::<Vec<_>>()
