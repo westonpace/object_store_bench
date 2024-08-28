@@ -1,8 +1,13 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use clap::Parser;
 use futures::StreamExt;
-use object_store::{gcp::GoogleCloudStorageBuilder, path::Path, ObjectStore, PutPayload};
+use object_store::{
+    gcp::GoogleCloudStorageBuilder, path::Path, BackoffConfig, ObjectStore, PutPayload,
+};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -39,7 +44,17 @@ async fn main() {
     let max_parallelism = args.max_parallelism.unwrap_or(32);
 
     let make_store = move || {
-        let builder = GoogleCloudStorageBuilder::new().with_bucket_name(args.bucket.clone());
+        let builder = GoogleCloudStorageBuilder::new()
+            .with_bucket_name(args.bucket.clone())
+            .with_retry(object_store::RetryConfig {
+                max_retries: 1000,
+                retry_timeout: Duration::from_secs(10000),
+                backoff: BackoffConfig {
+                    init_backoff: Duration::from_secs(5),
+                    max_backoff: Duration::from_secs(30),
+                    base: 2.,
+                },
+            });
         Arc::new(builder.build().unwrap())
     };
 
