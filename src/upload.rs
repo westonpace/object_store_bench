@@ -8,6 +8,7 @@ use futures::StreamExt;
 use object_store::{
     gcp::GoogleCloudStorageBuilder, path::Path, BackoffConfig, ObjectStore, PutPayload,
 };
+use rand::{thread_rng, RngCore};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
@@ -68,27 +69,28 @@ async fn main() {
     );
 
     // Just initialize whatever garbage.  Max that `part_size` can reach is 99 * initial_part_size
-    let max_part_size = 99 * initial_part_size as usize;
-    let mut data = bytes::BytesMut::with_capacity(max_part_size);
-    unsafe { data.set_len(max_part_size) };
-    let data = data.freeze();
+    // let max_part_size = 99 * initial_part_size as usize;
+    // let mut data = bytes::BytesMut::with_capacity(max_part_size);
+    // unsafe { data.set_len(max_part_size) };
+    // let data = data.freeze();
 
     let multipart = Arc::new(Mutex::new(store.put_multipart(&path).await.unwrap()));
     let total_start = std::time::Instant::now();
 
     let mut tasks = Vec::with_capacity(10000);
     while bytes_written < total_size {
-        let data = data.clone();
+        // let data = data.clone();
         let multipart = multipart.clone();
         let part_size =
             initial_part_size.max(((tasks.len() as u64 / 100) + 1) * PART_SIZE_INCREMENT);
         tasks.push(async move {
             let start = std::time::Instant::now();
-            let part = data.slice(0..part_size as usize);
+            let mut part = bytes::BytesMut::zeroed(part_size as usize);
+            thread_rng().fill_bytes(&mut part);
             log::info!("About to upload {} bytes of data", part.len());
             {
                 let mut multipart = multipart.lock().unwrap();
-                multipart.put_part(PutPayload::from_bytes(part))
+                multipart.put_part(PutPayload::from_bytes(part.freeze()))
             }
             .await
             .unwrap();
