@@ -92,7 +92,15 @@ async fn main() {
         .await;
 
     let mut multipart = multipart.lock().unwrap();
-    multipart.complete().await.unwrap();
+    loop {
+        match multipart.complete().await {
+            Ok(_) => break,
+            Err(e) => {
+                log::error!("Error completing multipart upload: {:?}", e);
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        }
+    }
     log::info!(
         "Total upload took {:?} seconds",
         total_start.elapsed().as_secs_f64()
