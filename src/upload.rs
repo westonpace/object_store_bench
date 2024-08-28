@@ -35,7 +35,7 @@ async fn main() {
     let path = Path::from(path.as_str());
 
     let total_size = args.total_size.unwrap_or(2 * 1024 * 1024 * 1024 * 1024);
-    let initial_part_size = args.initial_part_size.unwrap_or(5 * 1024 * 1024);
+    let initial_part_size = args.initial_part_size.unwrap_or(PART_SIZE_INCREMENT);
     let max_parallelism = args.max_parallelism.unwrap_or(32);
 
     let make_store = move || {
@@ -69,10 +69,11 @@ async fn main() {
             initial_part_size.max(((tasks.len() as u64 / 100) + 1) * PART_SIZE_INCREMENT);
         tasks.push(async move {
             let start = std::time::Instant::now();
+            let part = data.slice(0..part_size as usize);
             log::info!("About to upload {} bytes of data", data.len());
             {
                 let mut multipart = multipart.lock().unwrap();
-                multipart.put_part(PutPayload::from_bytes(data.clone()))
+                multipart.put_part(PutPayload::from_bytes(part))
             }
             .await
             .unwrap();
