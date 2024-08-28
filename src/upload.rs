@@ -70,7 +70,7 @@ async fn main() {
         tasks.push(async move {
             let start = std::time::Instant::now();
             let part = data.slice(0..part_size as usize);
-            log::info!("About to upload {} bytes of data", data.len());
+            log::info!("About to upload {} bytes of data", part.len());
             {
                 let mut multipart = multipart.lock().unwrap();
                 multipart.put_part(PutPayload::from_bytes(part))
